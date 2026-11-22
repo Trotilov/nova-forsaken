@@ -777,6 +777,7 @@ local okLab, labErr=pcall(function()
     local genStatus="Открой генератор"
     local knownAnimations={}
     local checkedConfigs={}
+    local lastAnimationScan=-100
     local function addId(value,name)
         if type(value)=="string" or type(value)=="number" then
             local id=tostring(value):match("(%d+)")
@@ -1014,7 +1015,10 @@ local okLab, labErr=pcall(function()
             local ok,err=pcall(function()
                 attachCharacter(player.Character)
                 if settings.autoBlock then
-                    loadAnimations()
+                    if os.clock()-lastAnimationScan>15 then
+                        lastAnimationScan=os.clock()
+                        loadAnimations()
+                    end
                     local group=killerFolder()
                     if group then
                         for _,killer in ipairs(group:GetChildren()) do attachKiller(killer) end
