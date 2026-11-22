@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.6.2 TEST (focused combat, generator and Noli config lab)
+-- NOVA FORSAKEN v0.6.3 TEST (Noli turn presets + solo generator pacing)
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -78,7 +78,7 @@ local header=obj("Frame",win,{
 })
 obj("TextLabel",header,{
     Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
-    Text="NOVA  /  0.6.2 TEST",Font=Enum.Font.GothamBold,TextSize=17,
+    Text="NOVA  /  0.6.3 TEST",Font=Enum.Font.GothamBold,TextSize=17,
     TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
     BackgroundTransparency=1
 })
@@ -759,19 +759,22 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.6.2 test started")
+print("[NOVA] ESP v0.6.3 test started")
 
 
 -- Focused experimental lab: Forsaken game objects, not guessed key presses.
 local okLab, labErr=pcall(function()
     local RS=game:GetService("ReplicatedStorage")
-    local settings={autoBlock=false,autoPunch=false,autoGen=false}
+    local settings={autoBlock=false,autoPunch=false,autoGen=false,soloBoost=false}
     local activeLinks={}
     local killerLinks={}
     local previousCharacter=nil
     local lastBlockTime=-100
     local lastPunchTime=-100
     local lastGenTime=-100
+    local soloRadius=32
+    local normalGenDelay=2.2
+    local soloGenDelay=1.2
     local blockStatus="Не проверено"
     local punchStatus="Не проверено"
     local genStatus="Открой генератор"
@@ -889,6 +892,19 @@ local okLab, labErr=pcall(function()
         "Улучшенное управление задаётся через Config Noli. Требуется поддержка require; действует со следующего появления убийцы.",
         65,muted,11)
     local noliButton=button(pages.combat,"○  Better Void Rush  /  ВЫКЛ")
+    local rushPresets={
+        {name="Умеренный",duration=.65,speed=2.5,mult=10},
+        {name="Крутой",duration=.35,speed=7,mult=22},
+        {name="Без ограничений",duration=.005,speed=10000,mult=1000}
+    }
+    local rushMode=2
+    local rushModeBtn=button(pages.combat,"")
+    local function drawRushMode()
+        local p=rushPresets[rushMode]
+        rushModeBtn.Text="Повороты: "..p.name..
+            "  ·  "..p.duration.." / "..p.speed.." / "..p.mult
+    end
+    drawRushMode()
     local noliOriginal={}
     local noliOn=false
     local function findParam(tbl,needle,seen,depth)
@@ -937,10 +953,11 @@ local okLab, labErr=pcall(function()
     local function enableNoli()
         local config,msg=findNoliConfig()
         if not config then return false,msg end
+        local preset=rushPresets[rushMode]
         local entries={
-            {name="InitialTurnDuration",value=.005},
-            {name="TurnSpeed",value=10000},
-            {name="InitialTurnMult",value=1000},
+            {name="InitialTurnDuration",value=preset.duration},
+            {name="TurnSpeed",value=preset.speed},
+            {name="InitialTurnMult",value=preset.mult},
         }
         local proposed={}
         for _,e in ipairs(entries) do
@@ -957,7 +974,7 @@ local okLab, labErr=pcall(function()
         noliOn=true
         noliButton.Text="●  Better Void Rush  /  ВКЛ"
         noliButton.BackgroundColor3=Color3.fromRGB(46,85,79)
-        return true,"3 параметра обновлены. Эффект ожидается после нового спавна Noli."
+        return true,"Режим "..rushPresets[rushMode].name.." включён. Изменения могут примениться со следующего спавна Noli."
     end
     noliButton.MouseButton1Click:Connect(function()
         if noliOn then
@@ -968,6 +985,18 @@ local okLab, labErr=pcall(function()
         local ok,message=enableNoli()
         noliInfo.Text=(ok and "ОК: " or "НЕ ПОДДЕРЖИВАЕТСЯ: ")..message
     end)
+    rushModeBtn.MouseButton1Click:Connect(function()
+        local wasOn=noliOn
+        if wasOn then restoreNoli() end
+        rushMode=rushMode%#rushPresets+1
+        drawRushMode()
+        if wasOn then
+            local ok,message=enableNoli()
+            noliInfo.Text=(ok and "ОК: " or "НЕ ПОДДЕРЖИВАЕТСЯ: ")..message
+        else
+            noliInfo.Text="Выбран режим "..rushPresets[rushMode].name..". Нажми Better Void Rush для применения."
+        end
+    end)
     line(pages.combat,"NOSFERATU / GUEST 666",30,mint,12)
     line(pages.combat,
         "Авто-Bloodhook и таймер Blood Hunt пока убраны из тестовой версии: работающего способа запуска не подтвердили.",
@@ -975,6 +1004,16 @@ local okLab, labErr=pcall(function()
 
     line(pages.generator,"ГЕНЕРАТОРЫ  ·  РЕАЛЬНЫЕ СОБЫТИЯ",33,mint,12)
     toggle(pages.generator,"Auto Generator (legacy event)","autoGen")
+    toggle(pages.generator,"Ускорять авточинку без игроков рядом","soloBoost")
+    local genModeLabel=line(pages.generator,
+        "Обычный интервал: 2.2 сек. В одиночку (32 studs): 1.2 сек. Только legacy-генераторы.",
+        54,muted,11)
+    local genSpeed=button(pages.generator,"Ускорение: 1.2 сек. / событие")
+    genSpeed.MouseButton1Click:Connect(function()
+        if soloGenDelay<1.7 then soloGenDelay=soloGenDelay+.2
+        else soloGenDelay=.8 end
+        genSpeed.Text=string.format("Ускорение: %.1f сек. / событие",soloGenDelay)
+    end)
     local genInfo=line(pages.generator,"Открой головоломку на генераторе.",94,white,12)
     local genProbe=button(pages.generator,"Проверить подключение генератора")
     line(pages.generator,"Для новых MinigameController-сессий нужен отдельный решатель. Просто слать события Submit без решения нельзя.",80,muted,11)
@@ -998,6 +1037,24 @@ local okLab, labErr=pcall(function()
         end
         if not chosen or distance>7 then return nil,"Нет генератора ближе 7 studs" end
         return chosen,string.format("рядом (%.1f studs)",distance)
+    end
+    -- Check every other player (survivors and killers); no bonus on unknown local position.
+    local function anyoneNearby(radius)
+        local ch=player.Character
+        local me=ch and ch:FindFirstChild("HumanoidRootPart")
+        if not me then return true end
+        for _,other in ipairs(Players:GetPlayers()) do
+            if other~=player then
+                local target=other.Character
+                local root=target and target:FindFirstChild("HumanoidRootPart")
+                local hum=target and target:FindFirstChildOfClass("Humanoid")
+                if root and (not hum or hum.Health>0) and
+                    (root.Position-me.Position).Magnitude<=radius then
+                    return true
+                end
+            end
+        end
+        return false
     end
     local function inspectGenerator()
         if not pg:FindFirstChild("PuzzleUI") then
@@ -1121,11 +1178,20 @@ local okLab, labErr=pcall(function()
                     end)()).."\nBlock: "..blockStatus.."\nPunch: "..punchStatus
                 if settings.autoGen then
                     local event,msg=inspectGenerator()
-                    if event and os.clock()-lastGenTime>2 then
+                    local nearby=anyoneNearby(soloRadius)
+                    local boosted=settings.soloBoost and not nearby
+                    local interval=boosted and soloGenDelay or normalGenDelay
+                    if event and os.clock()-lastGenTime>=interval then
                         lastGenTime=os.clock()
                         local sent,errMsg=pcall(function()event:FireServer()end)
-                        genStatus=sent and "Legacy Progress отправлен; результат проверяй в игре"
+                        genStatus=sent and (boosted
+                            and string.format("LEGACY: SOLO, интервал %.1f с. Событие отправлено, проверь прогресс.",interval)
+                            or "LEGACY: обычный интервал. Событие отправлено, проверь прогресс.")
                             or ("Ошибка события: "..tostring(errMsg):sub(1,45))
+                    elseif event then
+                        genStatus=(boosted and "SOLO: ускорение включено" or
+                            (nearby and "Рядом игрок: обычный режим" or "Обычный режим"))..
+                            string.format(" (%.1f с)",interval)
                     else
                         genStatus=msg or "Ожидаю PuzzleUI"
                     end
