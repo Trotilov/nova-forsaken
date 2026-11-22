@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.6.3 TEST (Noli turn presets + solo generator pacing)
+-- NOVA FORSAKEN v0.6.4 TEST (4s base generator interval + mild solo boost)
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -78,7 +78,7 @@ local header=obj("Frame",win,{
 })
 obj("TextLabel",header,{
     Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
-    Text="NOVA  /  0.6.3 TEST",Font=Enum.Font.GothamBold,TextSize=17,
+    Text="NOVA  /  0.6.4 TEST",Font=Enum.Font.GothamBold,TextSize=17,
     TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
     BackgroundTransparency=1
 })
@@ -759,7 +759,7 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.6.3 test started")
+print("[NOVA] ESP v0.6.4 test started")
 
 
 -- Focused experimental lab: Forsaken game objects, not guessed key presses.
@@ -773,8 +773,8 @@ local okLab, labErr=pcall(function()
     local lastPunchTime=-100
     local lastGenTime=-100
     local soloRadius=32
-    local normalGenDelay=2.2
-    local soloGenDelay=1.2
+    local normalGenDelay=4.0
+    local soloGenDelay=3.5
     local blockStatus="Не проверено"
     local punchStatus="Не проверено"
     local genStatus="Открой генератор"
@@ -1006,12 +1006,12 @@ local okLab, labErr=pcall(function()
     toggle(pages.generator,"Auto Generator (legacy event)","autoGen")
     toggle(pages.generator,"Ускорять авточинку без игроков рядом","soloBoost")
     local genModeLabel=line(pages.generator,
-        "Обычный интервал: 2.2 сек. В одиночку (32 studs): 1.2 сек. Только legacy-генераторы.",
+        "Обычный интервал: 4.0 сек. В одиночку (32 studs): 3.5 сек. Только legacy-генераторы.",
         54,muted,11)
-    local genSpeed=button(pages.generator,"Ускорение: 1.2 сек. / событие")
+    local genSpeed=button(pages.generator,"Ускорение: 3.5 сек. / событие")
     genSpeed.MouseButton1Click:Connect(function()
-        if soloGenDelay<1.7 then soloGenDelay=soloGenDelay+.2
-        else soloGenDelay=.8 end
+        if soloGenDelay<3.9 then soloGenDelay=math.min(3.9,soloGenDelay+.1)
+        else soloGenDelay=3.0 end
         genSpeed.Text=string.format("Ускорение: %.1f сек. / событие",soloGenDelay)
     end)
     local genInfo=line(pages.generator,"Открой головоломку на генераторе.",94,white,12)
