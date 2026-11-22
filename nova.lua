@@ -1267,7 +1267,7 @@ local okLab, labError=pcall(function()
                 clockTick()
             end)
             if not success then combatState.Text="LAB ошибка: "..tostring(err):sub(1,75) end
-            task.wait(.10)
+            task.wait((combat.block or combat.punch or combat.noli or combat.hook or combat.clock) and .10 or .60)
         end
     end)
     task.spawn(function()
@@ -1277,4 +1277,7 @@ local okLab, labError=pcall(function()
         end
     end)
 end)
-if not okLab then warn("[NOVA 0.6 experimental]",labError) end
+if not okLab then
+    warn("[NOVA 0.6 experimental]",labError)
+    local errorLine=line(pages.combat,"Не удалось запустить боевой модуль: "..tostring(labError):sub(1,140),100,Color3.fromRGB(255,135,145),11)
+end
