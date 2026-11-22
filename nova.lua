@@ -506,8 +506,9 @@ local function syncEvent()
         questProgressKnown=true
         eventState="Синхронизировано с интерфейсом пасса"
     else
-        questProgressKnown=false
-        eventState="Тир найден, точный прогресс пока недоступен"
+        eventState=questProgressKnown and
+            "Последний подтверждённый прогресс (ожидаем свежие данные)" or
+            "Тир найден, точный прогресс пока недоступен"
     end
     drawQuest()
 end
@@ -760,6 +761,77 @@ end)
 print("[NOVA] ESP v0.6 base started")
 
 
+
+-- Conservative Forsakeween progress recovery from replicated values or visible pass text.
+-- Numeric readings must match the exact current quest goal; unrelated XP is ignored.
+local function tryRefreshQuestProgress()
+    if not questVerified or not eventAuto then return end
+    local expected=questGoal
+    if type(expected)~="number" or expected<1 then return end
+    local candidates={}
+    local function offer(value,where)
+        if type(value)~="number" or value<0 or value>expected then return end
+        candidates[#candidates+1]={v=value,where=where}
+    end
+    local roots={player,pg}
+    local accepted={
+        "forsakeweenquestprogress","forsakeweenprogress",
+        "portraitquestprogress","portraitprogress",
+        "eventquestprogress","currentquestprogress"
+    }
+    local function good(name)
+        local low=name:lower():gsub("[%s_%-]","")
+        for _,key in ipairs(accepted) do
+            if low==key then return true end
+        end
+        return false
+    end
+    local function inspect(node)
+        local ancestry=node:GetFullName():lower()
+        if node:IsA("NumberValue") or node:IsA("IntValue") then
+            if good(node.Name) then offer(node.Value,ancestry) end
+        end
+        if node==player or node.Name:lower():find("event") or
+            node.Name:lower():find("forsake") or node.Name:lower():find("portrait") then
+            for key,value in pairs(node:GetAttributes()) do
+                if good(key) then offer(value,ancestry..":"..key) end
+            end
+        end
+        if (node:IsA("TextLabel") or node:IsA("TextButton")) and
+            not node:IsDescendantOf(gui) then
+            if ancestry:find("forsake",1,true) or ancestry:find("eventpass",1,true) or
+                ancestry:find("portrait",1,true) or ancestry:find("quest",1,true) then
+                local a,b=node.Text:match("(%d+)%s*/%s*(%d+)")
+                if not a then a,b=node.Text:match("(%d+)%s+[Oo][Ff]%s+(%d+)") end
+                if a and b and tonumber(b)==expected then
+                    offer(tonumber(a),ancestry)
+                end
+            end
+        end
+    end
+    for _,r in ipairs(roots) do
+        inspect(r)
+        for _,node in ipairs(r:GetDescendants()) do
+            inspect(node)
+        end
+    end
+    if #candidates==0 then return end
+    local first=candidates[1].v
+    for _,item in ipairs(candidates) do
+        if item.v~=first then return end
+    end
+    questProgress=first
+    questProgressKnown=true
+    eventState="Прогресс считан: "..first.."/"..expected
+    drawQuest()
+end
+task.spawn(function()
+    while running do
+        pcall(tryRefreshQuestProgress)
+        task.wait(4)
+    end
+end)
+
 -- EXPERIMENTAL LAB. Failures here must not disable the working ESP.
 local okLab, labError=pcall(function()
     local RunService=game:GetService("RunService")
@@ -988,7 +1060,7 @@ local okLab, labError=pcall(function()
         end
         return keyInput(key)
     end
-    local lastBlock=-100,lastPunch=-100,lastHook=-100
+    local lastBlock,lastPunch,lastHook=-100,-100,-100
     local blockIssuedAt=-100
     local lastSuccess=false
     local waitingBlockAt=nil
