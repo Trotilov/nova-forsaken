@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.4.0
+-- NOVA FORSAKEN v0.5.0
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -13,7 +13,7 @@ local env = (type(getgenv) == "function" and getgenv()) or _G
 for _, key in ipairs({"NovaESPStop", "NovaV03Stop", "NovaShortStop"}) do
     if type(env[key]) == "function" then pcall(env[key]) end
 end
-for _, name in ipairs({"NOVA_MINI", "NOVA_ESP_V03", "NOVA_SHORT", "NOVA_ESP_031", "NOVA_ESP_040"}) do
+for _, name in ipairs({"NOVA_MINI", "NOVA_ESP_V03", "NOVA_SHORT", "NOVA_ESP_031", "NOVA_ESP_040", "NOVA_ESP_050"}) do
     local prev = pg:FindFirstChild(name)
     if prev then prev:Destroy() end
 end
@@ -42,8 +42,8 @@ local palette = {
 local labelsOn, distanceOn, transparency = true, true, 0.65
 local liteMode, antiBlindOn = false, false
 local refreshSteps, refreshIndex = {1, 2, 3}, 2
-local questOn, questTier, questProgress, questGoal = false, 1, 0, 1
-local questText = "Впиши задание во вкладке ИВЕНТ"
+local questOn = true
+-- Quest definitions and sync state are initialized in the new event view.
 local function obj(class, parent, properties)
     local instance = Instance.new(class)
     for k, v in pairs(properties or {}) do instance[k] = v end
@@ -53,121 +53,129 @@ end
 local function corners(frame, radius)
     obj("UICorner", frame, {CornerRadius=UDim.new(0, radius or 8)})
 end
-local gui = obj("ScreenGui", pg, {
-    Name = "NOVA_ESP_040", ResetOnSpawn = false, IgnoreGuiInset = true,
-    DisplayOrder = 9999, ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-})
-local win = obj("Frame", gui, {
-    Size=UDim2.fromOffset(365, 320),
-    Position=UDim2.new(0.5,-182,0.5,-160),
-    BackgroundColor3=Color3.fromRGB(20,22,36), BorderSizePixel=0
-})
-corners(win, 12)
-obj("UIStroke", win, {Color=Color3.fromRGB(117,81,190),Thickness=1.3})
-local top = obj("Frame", win, {
-    Size=UDim2.new(1,0,0,41), BackgroundTransparency=1
-})
-obj("TextLabel", top, {
-    Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-105,1,0),
-    BackgroundTransparency=1,Text="NOVA  /  ESP 0.4",
-    TextColor3=Color3.fromRGB(222,197,255),
-    Font=Enum.Font.GothamBold,TextSize=16,
-    TextXAlignment=Enum.TextXAlignment.Left
-})
-local minimize = obj("TextButton", top, {
-    Position=UDim2.new(1,-80,0,6),Size=UDim2.fromOffset(33,29),
-    BackgroundColor3=Color3.fromRGB(50,54,80),BorderSizePixel=0,
-    Text="–",TextColor3=Color3.new(1,1,1),TextSize=20
-})
-corners(minimize,6)
-local quit = obj("TextButton", top, {
-    Position=UDim2.new(1,-42,0,6),Size=UDim2.fromOffset(33,29),
-    BackgroundColor3=Color3.fromRGB(129,49,76),BorderSizePixel=0,
-    Text="×",TextColor3=Color3.new(1,1,1),TextSize=19
-})
-corners(quit,6)
-local bubble = obj("TextButton",gui,{
-    Size=UDim2.fromOffset(48,48),Position=UDim2.new(0,12,0.45,0),
-    BackgroundColor3=Color3.fromRGB(111,72,195),BorderSizePixel=0,
-    Text="N",TextColor3=Color3.new(1,1,1),
-    Font=Enum.Font.GothamBold,TextSize=21,Visible=false
-})
-corners(bubble,12)
-minimize.MouseButton1Click:Connect(function()
-    win.Visible=false; bubble.Visible=true
-end)
-bubble.MouseButton1Click:Connect(function()
-    win.Visible=true; bubble.Visible=false
-end)
 
-local drag, dragStart, winStart, inputObject = false, nil, nil, nil
-top.InputBegan:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
-        drag=true; inputObject=input; dragStart=input.Position; winStart=win.Position
+-- NOVA v0.5 redesigned tablet-friendly interface
+local panelBg=Color3.fromRGB(15,19,30)
+local surface=Color3.fromRGB(27,34,49)
+local raised=Color3.fromRGB(36,45,63)
+local violet=Color3.fromRGB(148,108,249)
+local mint=Color3.fromRGB(78,215,182)
+local muted=Color3.fromRGB(155,172,193)
+local white=Color3.fromRGB(238,243,253)
+local gui=obj("ScreenGui",pg,{
+    Name="NOVA_ESP_050",ResetOnSpawn=false,IgnoreGuiInset=true,
+    DisplayOrder=9999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+})
+local win=obj("Frame",gui,{
+    AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+    Size=UDim2.fromOffset(490,324),BackgroundColor3=panelBg,BorderSizePixel=0
+})
+corners(win,15)
+obj("UIStroke",win,{Color=Color3.fromRGB(72,83,117),Thickness=1.2})
+local header=obj("Frame",win,{
+    Position=UDim2.fromOffset(0,0),Size=UDim2.new(1,0,0,43),
+    BackgroundTransparency=1,Active=true
+})
+obj("TextLabel",header,{
+    Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
+    Text="NOVA  /  0.5",Font=Enum.Font.GothamBold,TextSize=17,
+    TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
+    BackgroundTransparency=1
+})
+obj("TextLabel",header,{
+    Position=UDim2.new(1,-161,0,0),Size=UDim2.fromOffset(60,43),
+    Text="NEO",Font=Enum.Font.GothamBold,TextSize=11,
+    TextColor3=mint,BackgroundTransparency=1
+})
+local function square(parent,text,pos,bg)
+    local b=obj("TextButton",parent,{
+        Position=pos,Size=UDim2.fromOffset(34,30),
+        BackgroundColor3=bg,BorderSizePixel=0,Text=text,
+        TextColor3=white,Font=Enum.Font.GothamBold,TextSize=18
+    })
+    corners(b,8);return b
+end
+local mini=square(header,"−",UDim2.new(1,-84,0,6),raised)
+local quit=square(header,"×",UDim2.new(1,-43,0,6),Color3.fromRGB(106,50,70))
+local bubble=obj("TextButton",gui,{
+    Position=UDim2.new(0,12,.45,0),Size=UDim2.fromOffset(48,48),
+    BackgroundColor3=violet,Text="N",TextColor3=Color3.new(1,1,1),
+    Font=Enum.Font.GothamBold,TextSize=22,Visible=false,BorderSizePixel=0
+})
+corners(bubble,13)
+mini.MouseButton1Click:Connect(function() win.Visible=false;bubble.Visible=true end)
+bubble.MouseButton1Click:Connect(function() bubble.Visible=false;win.Visible=true end)
+local drag=false
+local dragInput,dragPos,dragOrigin
+header.InputBegan:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.Touch or
+       input.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=true;dragInput=input;dragPos=input.Position;dragOrigin=win.Position
         input.Changed:Connect(function()
             if input.UserInputState==Enum.UserInputState.End then drag=false end
         end)
     end
 end)
-local dragConnection = UIS.InputChanged:Connect(function(input)
-    if drag and (input==inputObject or input.UserInputType==Enum.UserInputType.MouseMovement) then
-        local delta=input.Position-dragStart
-        win.Position=UDim2.new(winStart.X.Scale,winStart.X.Offset+delta.X,
-            winStart.Y.Scale,winStart.Y.Offset+delta.Y)
+local dragConnection=UIS.InputChanged:Connect(function(input)
+    if drag and (input==dragInput or input.UserInputType==Enum.UserInputType.MouseMovement) then
+        local d=input.Position-dragPos
+        win.Position=UDim2.new(dragOrigin.X.Scale,dragOrigin.X.Offset+d.X,
+            dragOrigin.Y.Scale,dragOrigin.Y.Offset+d.Y)
     end
 end)
-
-local tabs=obj("Frame",win,{
-    Position=UDim2.fromOffset(9,44),Size=UDim2.new(1,-18,0,31),BackgroundTransparency=1
+local sidebar=obj("Frame",win,{
+    Position=UDim2.fromOffset(9,47),Size=UDim2.fromOffset(106,236),
+    BackgroundColor3=Color3.fromRGB(21,27,40),BorderSizePixel=0
 })
-local pageButtons,pages={},{}
-for i,item in ipairs({{"esp","ESP"},{"colors","ЦВЕТА"},{"settings","ОПЦИИ"},{"event","ИВЕНТ"}}) do
+corners(sidebar,9)
+local nav, pages={},{}
+local navOrder={{"esp","ESP"},{"event","ИВЕНТ"},{"settings","ОПЦИИ"}}
+for i,item in ipairs(navOrder) do
     local key,title=item[1],item[2]
-    local b=obj("TextButton",tabs,{
-        Size=UDim2.new(1/4,-6,1,0),Position=UDim2.new((i-1)/4,3,0,0),
-        BackgroundColor3=Color3.fromRGB(47,53,77),BorderSizePixel=0,
-        Text=title,Font=Enum.Font.GothamBold,TextSize=12,
-        TextColor3=Color3.new(1,1,1)
+    local b=obj("TextButton",sidebar,{
+        Position=UDim2.fromOffset(7,8+(i-1)*53),Size=UDim2.fromOffset(92,44),
+        BackgroundColor3=surface,BorderSizePixel=0,Text=title,
+        TextColor3=muted,TextSize=13,Font=Enum.Font.GothamBold
     })
-    corners(b,6)
-    pageButtons[key]=b
+    corners(b,8);nav[key]=b
     local scroll=obj("ScrollingFrame",win,{
-        Position=UDim2.fromOffset(11,81),Size=UDim2.new(1,-22,1,-130),
-        ScrollBarThickness=4,CanvasSize=UDim2.fromOffset(0,0),
-        BackgroundTransparency=1,BorderSizePixel=0,Visible=key=="esp"
+        Position=UDim2.fromOffset(123,47),Size=UDim2.new(1,-133,1,-95),
+        CanvasSize=UDim2.fromOffset(0,0),ScrollBarThickness=3,
+        BackgroundTransparency=1,BorderSizePixel=0,Visible=key=="esp",
+        ScrollingDirection=Enum.ScrollingDirection.Y
     })
-    pages[key]=scroll
     local layout=obj("UIListLayout",scroll,{
-        Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder
+        Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder
     })
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        scroll.CanvasSize=UDim2.fromOffset(0,layout.AbsoluteContentSize.Y+10)
+        if scroll.Parent then scroll.CanvasSize=UDim2.fromOffset(0,layout.AbsoluteContentSize.Y+12) end
     end)
+    pages[key]=scroll
     b.MouseButton1Click:Connect(function()
-        for id,p in pairs(pages) do
-            p.Visible=(id==key)
-            pageButtons[id].BackgroundColor3=(id==key)
-                and Color3.fromRGB(104,68,180) or Color3.fromRGB(47,53,77)
+        for n,page in pairs(pages) do
+            page.Visible=(n==key)
+            nav[n].BackgroundColor3=(n==key) and Color3.fromRGB(73,55,122) or surface
+            nav[n].TextColor3=(n==key) and white or muted
         end
     end)
 end
-pageButtons.esp.BackgroundColor3=Color3.fromRGB(104,68,180)
-local function line(parent,text,height)
+nav.esp.BackgroundColor3=Color3.fromRGB(73,55,122)
+nav.esp.TextColor3=white
+
+local function line(parent,text,height,color,size)
     return obj("TextLabel",parent,{
-        Size=UDim2.new(1,-8,0,height or 26),BackgroundTransparency=1,
-        Text=text,TextColor3=Color3.fromRGB(216,218,238),
-        Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true,
-        TextXAlignment=Enum.TextXAlignment.Left
+        Size=UDim2.new(1,-7,0,height or 25),BackgroundTransparency=1,
+        Text=text,TextColor3=color or muted,Font=Enum.Font.Gotham,
+        TextSize=size or 12,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left
     })
 end
-local function button(parent,text)
+local function button(parent,text,height)
     local b=obj("TextButton",parent,{
-        Size=UDim2.new(1,-8,0,32),BackgroundColor3=Color3.fromRGB(51,60,83),
-        BorderSizePixel=0,Text=text,TextColor3=Color3.new(1,1,1),
+        Size=UDim2.new(1,-7,0,height or 35),BackgroundColor3=raised,
+        BorderSizePixel=0,Text=text,TextColor3=white,
         Font=Enum.Font.GothamMedium,TextSize=12
     })
-    corners(b,6)
-    return b
+    corners(b,8);return b
 end
 local function hex(c)
     return string.format("#%02X%02X%02X", math.floor(c.R*255+.5),
@@ -179,176 +187,358 @@ local function fromHex(v)
     return Color3.fromRGB(tonumber(s:sub(1,2),16),
         tonumber(s:sub(3,4),16),tonumber(s:sub(5,6),16))
 end
-line(pages.esp,"Включай категории по отдельности. Всё работает локально.",29)
+
+line(pages.esp,"ПОДСВЕТКА  ·  цвет справа",28,mint,12)
 for _,info in ipairs(categories) do
     local id,name=info[1],info[2]
-    local b=button(pages.esp,"")
+    local row=obj("Frame",pages.esp,{
+        Size=UDim2.new(1,-7,0,42),
+        BackgroundColor3=surface,BorderSizePixel=0
+    })
+    corners(row,9)
+    local toggle=obj("TextButton",row,{
+        Position=UDim2.fromOffset(5,5),Size=UDim2.new(1,-150,0,32),
+        BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
+        TextColor3=white,Font=Enum.Font.GothamMedium,TextSize=12
+    })
+    local swatch=obj("TextButton",row,{
+        Position=UDim2.new(1,-126,0,7),Size=UDim2.fromOffset(27,27),
+        BorderSizePixel=0,BackgroundColor3=color[id],Text=""
+    })
+    corners(swatch,6)
+    local entry=obj("TextBox",row,{
+        Position=UDim2.new(1,-94,0,7),Size=UDim2.fromOffset(86,27),
+        BackgroundColor3=raised,BorderSizePixel=0,
+        Text=hex(color[id]),ClearTextOnFocus=false,
+        Font=Enum.Font.Code,TextSize=11,TextColor3=white
+    })
+    corners(entry,6)
     local function draw()
-        b.Text=(show[id] and "●  ВКЛ   " or "○  ВЫКЛ  ")..name
-        b.BackgroundColor3=show[id] and Color3.fromRGB(45,81,74)
-            or Color3.fromRGB(54,54,75)
+        toggle.Text=(show[id] and "●  " or "○  ")..name
+        toggle.TextColor3=(show[id] and white or muted)
     end
     draw()
-    b.MouseButton1Click:Connect(function() show[id]=not show[id];draw() end)
-end
-line(pages.colors,"Квадрат меняет цвет; HEX справа — точный оттенок.",32)
-for _,info in ipairs(categories) do
-    local id,name=info[1],info[2]
-    local r=obj("Frame",pages.colors,{
-        Size=UDim2.new(1,-8,0,36),BorderSizePixel=0,
-        BackgroundColor3=Color3.fromRGB(35,39,59)
-    })
-    corners(r,6)
-    obj("TextLabel",r,{
-        Size=UDim2.new(1,-117,1,0),Position=UDim2.fromOffset(8,0),
-        BackgroundTransparency=1,Text=name,TextXAlignment=Enum.TextXAlignment.Left,
-        TextColor3=Color3.new(1,1,1),TextSize=12,Font=Enum.Font.Gotham
-    })
-    local swatch=obj("TextButton",r,{
-        Position=UDim2.new(1,-110,0,6),Size=UDim2.fromOffset(24,24),
-        BackgroundColor3=color[id],BorderSizePixel=0,Text=""
-    })
-    corners(swatch,4)
-    local entry=obj("TextBox",r,{
-        Position=UDim2.new(1,-81,0,5),Size=UDim2.fromOffset(75,26),
-        BackgroundColor3=Color3.fromRGB(59,63,84),BorderSizePixel=0,
-        Text=hex(color[id]),ClearTextOnFocus=false,
-        TextColor3=Color3.new(1,1,1),Font=Enum.Font.Code,TextSize=12
-    })
-    corners(entry,4)
+    toggle.MouseButton1Click:Connect(function()show[id]=not show[id];draw()end)
     local index=0
     swatch.MouseButton1Click:Connect(function()
-        index=index%#palette+1
-        color[id]=palette[index]
-        swatch.BackgroundColor3=color[id]
-        entry.Text=hex(color[id])
+        index=index%#palette+1;color[id]=palette[index]
+        swatch.BackgroundColor3=color[id];entry.Text=hex(color[id])
     end)
     entry.FocusLost:Connect(function()
         color[id]=fromHex(entry.Text) or color[id]
-        swatch.BackgroundColor3=color[id]
-        entry.Text=hex(color[id])
+        swatch.BackgroundColor3=color[id];entry.Text=hex(color[id])
     end)
 end
-local nameBtn=button(pages.settings,"")
-local distanceBtn=button(pages.settings,"")
-local fillBtn=button(pages.settings,"")
-local liteBtn=button(pages.settings,"")
+line(pages.esp,"● нажми, чтобы отключить  ·  цветной квадрат меняет оттенок",34,muted,11)
+
+local function optionToggle(title,get,set)
+    local b=button(pages.settings,"")
+    local function draw()b.Text=title.."  :  "..(get() and "ВКЛ" or "ВЫКЛ")end
+    draw()
+    b.MouseButton1Click:Connect(function()set(not get());draw()end)
+    return b
+end
+line(pages.settings,"ПРОИЗВОДИТЕЛЬНОСТЬ",27,mint,12)
+optionToggle("Lite ESP",function()return liteMode end,function(v)liteMode=v end)
+optionToggle("Названия",function()return labelsOn end,function(v)labelsOn=v end)
+optionToggle("Дистанция",function()return distanceOn end,function(v)distanceOn=v end)
 local speedBtn=button(pages.settings,"")
-local blindBtn=button(pages.settings,"")
-local function redrawSettings()
-    nameBtn.Text="Названия: "..(labelsOn and "ВКЛ" or "ВЫКЛ")
-    distanceBtn.Text="Расстояние: "..(distanceOn and "ВКЛ" or "ВЫКЛ")
-    fillBtn.Text="Заливка: "..tostring(math.floor((1-transparency)*100+.5)).."%"
-    liteBtn.Text="Lite ESP: "..(liteMode and "ВКЛ (без подписей)" or "ВЫКЛ")
-    speedBtn.Text="Проверка ESP: раз в "..tostring(refreshSteps[refreshIndex]).." сек."
-    blindBtn.Text="Anti Blind: "..(antiBlindOn and "ВКЛ" or "ВЫКЛ")
-end
-redrawSettings()
-nameBtn.MouseButton1Click:Connect(function() labelsOn=not labelsOn;redrawSettings() end)
-distanceBtn.MouseButton1Click:Connect(function() distanceOn=not distanceOn;redrawSettings() end)
-fillBtn.MouseButton1Click:Connect(function()
-    transparency=transparency-.15
-    if transparency<.2 then transparency=.95 end
-    redrawSettings()
-end)
-liteBtn.MouseButton1Click:Connect(function() liteMode=not liteMode;redrawSettings() end)
+local function speedText()speedBtn.Text="Обновление ESP  /  "..refreshSteps[refreshIndex].." сек."end
+speedText()
 speedBtn.MouseButton1Click:Connect(function()
-    refreshIndex=refreshIndex%#refreshSteps+1;redrawSettings()
+    refreshIndex=refreshIndex%#refreshSteps+1;speedText()
 end)
-blindBtn.MouseButton1Click:Connect(function() antiBlindOn=not antiBlindOn;redrawSettings() end)
-line(pages.settings,"Lite скрывает подписи и расстояния. Anti Blind отключает доступные клиенту эффекты размытия и ослепления.",66)
-line(pages.settings,"Фейковые генераторы определяются только по признакам, доступным клиенту; распознавание может быть неполным.",65)
+local fillBtn=button(pages.settings,"")
+local function fillText()fillBtn.Text="Прозрачность заливки  /  "..math.floor(transparency*100).."%"
+end
+fillText()
+fillBtn.MouseButton1Click:Connect(function()
+    transparency=transparency+.15
+    if transparency>.95 then transparency=.2 end
+    fillText()
+end)
+line(pages.settings,"ВИЗУАЛЬНЫЕ ЭФФЕКТЫ",29,mint,12)
+optionToggle("Anti Blind",function()return antiBlindOn end,function(v)antiBlindOn=v end)
+line(pages.settings,"Фейки определяются только по видимым клиенту признакам.",45,muted,11)
 
--- Manual event tracker: no claims about reading the pass automatically.
+-- The first 15 portrait quests are short summaries, not invented progress.
+local questData={
+    {goal=200,who="NOOB",task="Пробеги 200 studs во время погони под Bloxy Cola",keys={"noob","bloxy"}},
+    {goal=5,who="SHEDLETSKY",task="5 раз оглуши киллера, пока он преследует другого",keys={"shedletsky","stun"}},
+    {goal=5,who="ELLIOT",task="5 раз исцели пиццей выжившего с HP ниже 50%",keys={"elliot","heal"}},
+    {goal=6,who="SLASHER",task="6 убийств с помощью Decapitation",keys={"slasher","decap"}},
+    {goal=120,who="CHANCE",task="Увеличь максимальное HP на 120 через Reroll",keys={"chance","reroll"}},
+    {goal=55,who="BUILDERMAN",task="Нанеси 55 урона недавно установленными турелями",keys={"builderman","turret"}},
+    {goal=5,who="C00LKIDD",task="5 убийств через Walkspeed Override или ожог",keys={"c00lkidd","walkspeed"}},
+    {goal=3,who="DUSEKKAR",task="3 раза задень выжившего и киллера Plasma Beam",keys={"dusekkar","plasma"}},
+    {goal=40,who="GUEST 1337",task="Получи суммарно 40 дополнительного HP через Block",keys={"guest 1337","block"}},
+    {goal=3,who="NOSFERATU",task="3 раза атакуй другого выжившего в течение 10 секунд после Hunter's Feast",keys={"nosferatu","hunter"}},
+    {goal=24,who="VEERONICA",task="Продержи 24 секунды эффект после прохода сквозь киллера в фазе",keys={"veeronica","phase"}},
+    {goal=3,who="ОБЩАЯ",task="3 раза оглуши киллера с расстояния более 30 studs",keys={"30","studs"}},
+    {goal=10,who="JANE DOE",task="10 попаданий полностью заряженным Crystal Pitch",keys={"jane doe","crystal"}},
+    {goal=45,who="JOHN DOE",task="45 секунд бонуса скорости от Corrupted Energy и Digital Footprint",keys={"john doe","corrupted"}},
+    {goal=180,who="DUSEKKAR",task="Поглоти 180 урона щитами Spawn Protection",keys={"dusekkar","spawn protection"}}
+}
+local eventAuto=true
+local questVerified=false
+local questProgressKnown=false
+local questProgress=0
+local questGoal=0
+local questText=""
+local questTier=1
+local eventState="Открой Forsakeween-пасс один раз для синхронизации"
+local function selectTier(t,verified)
+    if t<1 then t=1 end
+    if t>#questData then t=#questData end
+    if t~=questTier then questProgressKnown=false end
+    questTier=t
+    questVerified=verified
+    local q=questData[t]
+    questText=q.task
+    questGoal=q.goal
+end
 local hud=obj("Frame",gui,{
-    Position=UDim2.new(0,12,0.14,0),Size=UDim2.fromOffset(310,104),
-    BackgroundColor3=Color3.fromRGB(25,21,42),BorderSizePixel=0,Visible=false
+    Position=UDim2.new(0,12,.13,0),
+    Size=UDim2.fromOffset(322,93),
+    BackgroundColor3=panelBg,BorderSizePixel=0,Visible=questOn
 })
-corners(hud,10)
-obj("UIStroke",hud,{Color=Color3.fromRGB(156,98,204),Thickness=1})
+corners(hud,11)
+obj("UIStroke",hud,{Color=Color3.fromRGB(95,75,148),Thickness=1.1})
 local hudTitle=obj("TextLabel",hud,{
-    Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,24),
-    BackgroundTransparency=1,TextColor3=Color3.fromRGB(235,191,255),
-    Text="FORSAKEWEEN",Font=Enum.Font.GothamBold,TextSize=14,
+    Position=UDim2.fromOffset(12,5),Size=UDim2.fromOffset(272,22),
+    BackgroundTransparency=1,Text="FORSAKEWEEN",
+    TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,
+    TextColor3=mint,TextSize=13
+})
+local hudClose=square(hud,"×",UDim2.new(1,-31,0,5),raised)
+hudClose.Size=UDim2.fromOffset(25,24)
+hudClose.TextSize=15
+local hudText=obj("TextLabel",hud,{
+    Position=UDim2.fromOffset(12,27),Size=UDim2.new(1,-24,0,44),
+    BackgroundTransparency=1,TextColor3=white,TextSize=12,
+    Font=Enum.Font.Gotham,TextWrapped=true,
     TextXAlignment=Enum.TextXAlignment.Left
 })
-local hudQuest=obj("TextLabel",hud,{
-    Position=UDim2.fromOffset(10,29),Size=UDim2.new(1,-20,0,49),
-    BackgroundTransparency=1,TextColor3=Color3.fromRGB(239,238,255),
-    TextWrapped=true,Font=Enum.Font.Gotham,TextSize=12,
-    TextXAlignment=Enum.TextXAlignment.Left
+local trackBg=obj("Frame",hud,{
+    Position=UDim2.fromOffset(12,77),Size=UDim2.new(1,-24,0,6),
+    BackgroundColor3=raised,BorderSizePixel=0
 })
-local hudProgress=obj("TextLabel",hud,{
-    Position=UDim2.fromOffset(10,80),Size=UDim2.new(1,-20,0,20),
-    BackgroundTransparency=1,TextColor3=Color3.fromRGB(195,210,255),
-    Font=Enum.Font.GothamMedium,TextSize=12,
-    TextXAlignment=Enum.TextXAlignment.Left
+corners(trackBg,5)
+local trackFill=obj("Frame",trackBg,{
+    Size=UDim2.fromScale(0,1),BackgroundColor3=mint,BorderSizePixel=0
 })
-local function redrawQuest()
-    hud.Visible=questOn
-    hudTitle.Text="FORSAKEWEEN | ТИР "..questTier.." [ручной]"
-    hudQuest.Text=questText
-    hudProgress.Text="ПРОГРЕСС: "..questProgress.." / "..questGoal
-end
-local questToggle=button(pages.event,"")
-local questTierLabel=line(pages.event,"Текущий тир: 1",26)
-local questPrev=button(pages.event,"Предыдущий тир -1")
-local questNext=button(pages.event,"Следующий тир +1")
-line(pages.event,"Задание и прогресс пока вводятся вручную — игра может не предоставлять их клиенту.",44)
-line(pages.event,"Текст задания:",22)
-local questInput=obj("TextBox",pages.event,{
-    Size=UDim2.new(1,-8,0,65),BackgroundColor3=Color3.fromRGB(49,47,74),
-    BorderSizePixel=0,Text=questText,MultiLine=true,TextWrapped=true,
-    ClearTextOnFocus=false,TextColor3=Color3.new(1,1,1),
-    Font=Enum.Font.Gotham,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
-})
-corners(questInput,6)
-line(pages.event,"Сколько нужно выполнить (например, 5):",25)
-local goalInput=obj("TextBox",pages.event,{
-    Size=UDim2.new(1,-8,0,33),BackgroundColor3=Color3.fromRGB(49,47,74),
-    BorderSizePixel=0,Text="1",ClearTextOnFocus=false,
-    TextColor3=Color3.new(1,1,1),Font=Enum.Font.Gotham,TextSize=12
-})
-corners(goalInput,6)
-local questMinus=button(pages.event,"Прогресс -1")
-local questPlus=button(pages.event,"Прогресс +1")
-local function refreshQuestButtons()
-    questToggle.Text="Показывать HUD: "..(questOn and "ВКЛ" or "ВЫКЛ")
-    questTierLabel.Text="Текущий тир: "..questTier
-    redrawQuest()
-end
-questToggle.MouseButton1Click:Connect(function() questOn=not questOn;refreshQuestButtons() end)
-questPrev.MouseButton1Click:Connect(function()
-    questTier=math.max(1,questTier-1);questProgress=0;refreshQuestButtons()
+corners(trackFill,5)
+local dragHud=false
+local hudInput,hudStart,hudOrigin
+hud.InputBegan:Connect(function(input)
+    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragHud=true;hudInput=input;hudStart=input.Position;hudOrigin=hud.Position
+        input.Changed:Connect(function()if input.UserInputState==Enum.UserInputState.End then dragHud=false end end)
+    end
 end)
-questNext.MouseButton1Click:Connect(function()
-    questTier=questTier+1;questProgress=0;refreshQuestButtons()
+local hudDragConn=UIS.InputChanged:Connect(function(input)
+    if dragHud and (input==hudInput or input.UserInputType==Enum.UserInputType.MouseMovement) then
+        local d=input.Position-hudStart
+        hud.Position=UDim2.new(hudOrigin.X.Scale,hudOrigin.X.Offset+d.X,
+            hudOrigin.Y.Scale,hudOrigin.Y.Offset+d.Y)
+    end
 end)
-questInput.FocusLost:Connect(function()
-    questText=questInput.Text:sub(1,220);redrawQuest()
-end)
-goalInput.FocusLost:Connect(function()
-    questGoal=math.clamp(tonumber(goalInput.Text) or questGoal,1,9999)
-    questGoal=math.floor(questGoal)
-    questProgress=math.min(questProgress,questGoal)
-    goalInput.Text=tostring(questGoal)
-    redrawQuest()
-end)
-questMinus.MouseButton1Click:Connect(function()
-    questProgress=math.max(0,questProgress-1);redrawQuest()
-end)
-questPlus.MouseButton1Click:Connect(function()
-    questProgress=math.min(questGoal,questProgress+1);redrawQuest()
-end)
-refreshQuestButtons()
 
+local eventInfo=line(pages.event,"АВТО-СИНХРОНИЗАЦИЯ",31,mint,13)
+local eventMode=button(pages.event,"")
+local eventHUD=button(pages.event,"")
+local eventMessage=line(pages.event,"",46,muted,11)
+local tierRow=obj("Frame",pages.event,{
+    Size=UDim2.new(1,-7,0,42),BackgroundColor3=surface,BorderSizePixel=0
+})
+corners(tierRow,8)
+local prev=obj("TextButton",tierRow,{
+    Position=UDim2.fromOffset(5,5),Size=UDim2.fromOffset(46,32),
+    Text="−",BackgroundColor3=raised,TextColor3=white,
+    Font=Enum.Font.GothamBold,TextSize=20,BorderSizePixel=0
+})
+corners(prev,7)
+local tierText=obj("TextLabel",tierRow,{
+    Position=UDim2.fromOffset(55,0),Size=UDim2.new(1,-110,1,0),
+    BackgroundTransparency=1,TextColor3=white,
+    Font=Enum.Font.GothamBold,TextSize=14
+})
+local nextBtn=obj("TextButton",tierRow,{
+    Position=UDim2.new(1,-51,0,5),Size=UDim2.fromOffset(46,32),
+    Text="+",BackgroundColor3=raised,TextColor3=white,
+    Font=Enum.Font.GothamBold,TextSize=19,BorderSizePixel=0
+})
+corners(nextBtn,7)
+local taskLabel=line(pages.event,"",79,white,12)
+local syncBtn=button(pages.event,"Считать данные из пасса")
+local reportBtn=button(pages.event,"Скопировать диагностику пасса")
+line(pages.event,"Задания 1–15 уже встроены. Прогресс показывается только если игра передала точное значение.",60,muted,11)
+local function drawQuest()
+    eventMode.Text="Режим  /  "..(eventAuto and "АВТО" or "ВЫБОР ТИРА")
+    eventHUD.Text="Панель в раунде  /  "..(questOn and "ПОКАЗЫВАТЬ" or "СКРЫТЬ")
+    eventMessage.Text=eventState
+    tierText.Text="ТИР "..(questVerified and tostring(questTier) or (eventAuto and "?" or tostring(questTier)))
+    if questVerified or not eventAuto then
+        taskLabel.Text="["..questData[questTier].who.."] "..questText
+        hudText.Text=questText
+        local progress=questProgressKnown and (tostring(questProgress).." / "..questGoal)
+           or ("— / "..questGoal)
+        hudTitle.Text="FORSAKEWEEN  •  ТИР "..questTier.."  "..progress
+    else
+        taskLabel.Text="Открой окно ивентового пасса в лобби. NOVA попробует найти текущий тир и прогресс."
+        hudText.Text="Открой Forsakeween-пасс, чтобы получить задание"
+        hudTitle.Text="FORSAKEWEEN  •  ОЖИДАНИЕ"
+    end
+    trackFill.Size=UDim2.fromScale((questProgressKnown and questGoal>0) and
+        math.clamp(questProgress/questGoal,0,1) or 0,1)
+    hud.Visible=questOn
+end
+eventMode.MouseButton1Click:Connect(function()
+    eventAuto=not eventAuto
+    if not eventAuto then
+        questVerified=false
+        questProgressKnown=false
+        selectTier(questTier,false)
+        eventState="Выбор тира: используйте − и +. Прогресс не придумываем."
+    else
+        questVerified=false
+        questProgressKnown=false
+        eventState="Открой Forsakeween-пасс для автосинхронизации"
+    end
+    drawQuest()
+end)
+eventHUD.MouseButton1Click:Connect(function() questOn=not questOn;drawQuest()end)
+hudClose.MouseButton1Click:Connect(function()questOn=false;drawQuest()end)
+local function manualTier(diff)
+    eventAuto=false
+    selectTier(math.clamp(questTier+diff,1,#questData),false)
+    questProgressKnown=false
+    eventState="Тир выбран вручную; счётчик из игры недоступен"
+    drawQuest()
+end
+prev.MouseButton1Click:Connect(function()manualTier(-1)end)
+nextBtn.MouseButton1Click:Connect(function()manualTier(1)end)
+local function isEventGui(node)
+    local p=node
+    local depth=0
+    while p and p~=pg and depth<10 do
+        local n=p.Name:lower()
+        if n:find("forsake",1,true) or n:find("halloween",1,true) or
+           n:find("battlepass",1,true) or n:find("battle_pass",1,true) or
+           n:find("eventquest",1,true) or n:find("eventpass",1,true) then
+            return true
+        end
+        p=p.Parent;depth=depth+1
+    end
+    return false
+end
+local lastReport="Диагностика ещё не собрана"
+local function syncEvent()
+    if not eventAuto then return end
+    local labels={}
+    local samples={}
+    for _,el in ipairs(pg:GetDescendants()) do
+        if (el:IsA("TextLabel") or el:IsA("TextButton")) and
+           not el:IsDescendantOf(gui) and isEventGui(el) then
+            local txt=tostring(el.Text or "")
+            if txt~="" then
+                labels[#labels+1]={object=el,text=txt,lower=txt:lower()}
+                if #samples<50 then samples[#samples+1]=el.Name..": "..txt:sub(1,100) end
+            end
+        end
+    end
+    lastReport="Forsakeween labels: "..#labels.."\n"..table.concat(samples,"\n")
+    if #labels==0 then
+        eventState="Данные не найдены. Открой Forsakeween-пасс в лобби."
+        drawQuest()
+        return
+    end
+    local tierFromCurrent=nil
+    local matches={}
+    for _,item in ipairs(labels) do
+        local text=item.lower
+        if text:find("current",1,true) or text:find("active",1,true) or
+           text:find("текущ",1,true) then
+            local n=text:match("tier%s*#?%s*(%d+)") or
+                text:match("тир%s*#?%s*(%d+)")
+            if n and tonumber(n) and tonumber(n)<=#questData then
+                tierFromCurrent=tonumber(n)
+            end
+        end
+        for tier,q in ipairs(questData) do
+            local found=true
+            for _,word in ipairs(q.keys) do
+                if not text:find(word,1,true) then found=false;break end
+            end
+            if found and #text>20 then matches[tier]=item end
+        end
+    end
+    local uniqueTier,matchCount=nil,0
+    for k in pairs(matches) do uniqueTier=k;matchCount=matchCount+1 end
+    local chosen=tierFromCurrent or (matchCount==1 and uniqueTier or nil)
+    if not chosen then
+        eventState="Пасс найден, но текущую задачу определить не удалось."
+        drawQuest()
+        return
+    end
+    if chosen~=questTier or not questVerified then
+        selectTier(chosen,true)
+        questProgressKnown=false
+    end
+    local expected=questGoal
+    local picked=nil
+    local match=matches[chosen]
+    if match then
+        local parent=match.object.Parent
+        for _,item in ipairs(labels) do
+            if item.object==match.object or
+               (parent and (item.object.Parent==parent or item.object.Parent==parent.Parent)) then
+                local a,b=item.text:match("(%d+)%s*/%s*(%d+)")
+                if a and tonumber(b)==expected and tonumber(a)<=expected then
+                    picked=tonumber(a)
+                    break
+                end
+            end
+        end
+    end
+    if picked~=nil then
+        questProgress=picked
+        questProgressKnown=true
+        eventState="Синхронизировано с интерфейсом пасса"
+    else
+        questProgressKnown=false
+        eventState="Тир найден, точный прогресс пока недоступен"
+    end
+    drawQuest()
+end
+syncBtn.MouseButton1Click:Connect(function()
+    local ok,err=pcall(syncEvent)
+    if not ok then eventState="Ошибка чтения: "..tostring(err):sub(1,45);drawQuest() end
+end)
+reportBtn.MouseButton1Click:Connect(function()
+    if type(setclipboard)=="function" then
+        local ok=pcall(setclipboard,lastReport)
+        eventState=ok and "Диагностика скопирована" or "Не удалось скопировать"
+    else
+        eventState="Копирование недоступно в NEO"
+    end
+    drawQuest()
+end)
+selectTier(questTier,false)
+drawQuest()
+task.spawn(function()
+    while running do
+        if eventAuto then pcall(syncEvent) end
+        task.wait(5)
+    end
+end)
 local status=obj("TextLabel",win,{
-    Position=UDim2.new(0,10,1,-44),Size=UDim2.new(1,-20,0,38),
-    BackgroundColor3=Color3.fromRGB(30,34,51),BorderSizePixel=0,
-    Text="ESP: сканирование...",TextColor3=Color3.fromRGB(232,218,255),
+    Position=UDim2.new(0,122,1,-36),Size=UDim2.new(1,-131,0,25),
+    BackgroundColor3=surface,BorderSizePixel=0,
+    Text="ESP: ищем объекты...",TextColor3=muted,
     Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true
 })
-corners(status,6)
+corners(status,7)
 
 local markers={}
 local function clear(model)
@@ -519,6 +709,7 @@ local function stop()
     running=false
     if restoreVisuals then restoreVisuals() end
     if dragConnection then dragConnection:Disconnect() end
+    if hudDragConn then hudDragConn:Disconnect() end
     for model in pairs(markers) do clear(model) end
     gui:Destroy()
 end
@@ -528,7 +719,7 @@ task.spawn(function()
     while running do
         local ok,err=pcall(scan)
         if not ok then
-            warn("[NOVA 0.3.1] ",err)
+            warn("[NOVA 0.5] ",err)
             if status.Parent then status.Text="ОШИБКА: "..tostring(err):sub(1,100) end
         end
         task.wait(refreshSteps[refreshIndex])
@@ -566,4 +757,4 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.4 started")
+print("[NOVA] ESP v0.5 started")
