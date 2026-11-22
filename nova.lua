@@ -1,10 +1,11 @@
--- NOVA FORSAKEN ESP v0.3.1
+-- NOVA FORSAKEN v0.4.0
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 if not player then return end
 local pg = player:WaitForChild("PlayerGui")
@@ -12,7 +13,7 @@ local env = (type(getgenv) == "function" and getgenv()) or _G
 for _, key in ipairs({"NovaESPStop", "NovaV03Stop", "NovaShortStop"}) do
     if type(env[key]) == "function" then pcall(env[key]) end
 end
-for _, name in ipairs({"NOVA_MINI", "NOVA_ESP_V03", "NOVA_SHORT", "NOVA_ESP_031"}) do
+for _, name in ipairs({"NOVA_MINI", "NOVA_ESP_V03", "NOVA_SHORT", "NOVA_ESP_031", "NOVA_ESP_040"}) do
     local prev = pg:FindFirstChild(name)
     if prev then prev:Destroy() end
 end
@@ -39,6 +40,10 @@ local palette = {
     Color3.fromRGB(255,255,255)
 }
 local labelsOn, distanceOn, transparency = true, true, 0.65
+local liteMode, antiBlindOn = false, false
+local refreshSteps, refreshIndex = {1, 2, 3}, 2
+local questOn, questTier, questProgress, questGoal = false, 1, 0, 1
+local questText = "Впиши задание во вкладке ИВЕНТ"
 local function obj(class, parent, properties)
     local instance = Instance.new(class)
     for k, v in pairs(properties or {}) do instance[k] = v end
@@ -49,7 +54,7 @@ local function corners(frame, radius)
     obj("UICorner", frame, {CornerRadius=UDim.new(0, radius or 8)})
 end
 local gui = obj("ScreenGui", pg, {
-    Name = "NOVA_ESP_031", ResetOnSpawn = false, IgnoreGuiInset = true,
+    Name = "NOVA_ESP_040", ResetOnSpawn = false, IgnoreGuiInset = true,
     DisplayOrder = 9999, ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 })
 local win = obj("Frame", gui, {
@@ -64,7 +69,7 @@ local top = obj("Frame", win, {
 })
 obj("TextLabel", top, {
     Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-105,1,0),
-    BackgroundTransparency=1,Text="NOVA  /  ESP 0.3.1",
+    BackgroundTransparency=1,Text="NOVA  /  ESP 0.4",
     TextColor3=Color3.fromRGB(222,197,255),
     Font=Enum.Font.GothamBold,TextSize=16,
     TextXAlignment=Enum.TextXAlignment.Left
@@ -116,10 +121,10 @@ local tabs=obj("Frame",win,{
     Position=UDim2.fromOffset(9,44),Size=UDim2.new(1,-18,0,31),BackgroundTransparency=1
 })
 local pageButtons,pages={},{}
-for i,item in ipairs({{"esp","ESP"},{"colors","ЦВЕТА"},{"settings","НАСТРОЙКИ"}}) do
+for i,item in ipairs({{"esp","ESP"},{"colors","ЦВЕТА"},{"settings","ОПЦИИ"},{"event","ИВЕНТ"}}) do
     local key,title=item[1],item[2]
     local b=obj("TextButton",tabs,{
-        Size=UDim2.new(1/3,-6,1,0),Position=UDim2.new((i-1)/3,3,0,0),
+        Size=UDim2.new(1/4,-6,1,0),Position=UDim2.new((i-1)/4,3,0,0),
         BackgroundColor3=Color3.fromRGB(47,53,77),BorderSizePixel=0,
         Text=title,Font=Enum.Font.GothamBold,TextSize=12,
         TextColor3=Color3.new(1,1,1)
@@ -227,10 +232,16 @@ end
 local nameBtn=button(pages.settings,"")
 local distanceBtn=button(pages.settings,"")
 local fillBtn=button(pages.settings,"")
+local liteBtn=button(pages.settings,"")
+local speedBtn=button(pages.settings,"")
+local blindBtn=button(pages.settings,"")
 local function redrawSettings()
     nameBtn.Text="Названия: "..(labelsOn and "ВКЛ" or "ВЫКЛ")
     distanceBtn.Text="Расстояние: "..(distanceOn and "ВКЛ" or "ВЫКЛ")
     fillBtn.Text="Заливка: "..tostring(math.floor((1-transparency)*100+.5)).."%"
+    liteBtn.Text="Lite ESP: "..(liteMode and "ВКЛ (без подписей)" or "ВЫКЛ")
+    speedBtn.Text="Проверка ESP: раз в "..tostring(refreshSteps[refreshIndex]).." сек."
+    blindBtn.Text="Anti Blind: "..(antiBlindOn and "ВКЛ" or "ВЫКЛ")
 end
 redrawSettings()
 nameBtn.MouseButton1Click:Connect(function() labelsOn=not labelsOn;redrawSettings() end)
@@ -240,7 +251,96 @@ fillBtn.MouseButton1Click:Connect(function()
     if transparency<.2 then transparency=.95 end
     redrawSettings()
 end)
-line(pages.settings,"Фейковый генератор отмечается отдельно, только когда есть признак, доступный клиенту.",70)
+liteBtn.MouseButton1Click:Connect(function() liteMode=not liteMode;redrawSettings() end)
+speedBtn.MouseButton1Click:Connect(function()
+    refreshIndex=refreshIndex%#refreshSteps+1;redrawSettings()
+end)
+blindBtn.MouseButton1Click:Connect(function() antiBlindOn=not antiBlindOn;redrawSettings() end)
+line(pages.settings,"Lite скрывает подписи и расстояния. Anti Blind отключает доступные клиенту эффекты размытия и ослепления.",66)
+line(pages.settings,"Фейковые генераторы определяются только по признакам, доступным клиенту; распознавание может быть неполным.",65)
+
+-- Manual event tracker: no claims about reading the pass automatically.
+local hud=obj("Frame",gui,{
+    Position=UDim2.new(0,12,0.14,0),Size=UDim2.fromOffset(310,104),
+    BackgroundColor3=Color3.fromRGB(25,21,42),BorderSizePixel=0,Visible=false
+})
+corners(hud,10)
+obj("UIStroke",hud,{Color=Color3.fromRGB(156,98,204),Thickness=1})
+local hudTitle=obj("TextLabel",hud,{
+    Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,24),
+    BackgroundTransparency=1,TextColor3=Color3.fromRGB(235,191,255),
+    Text="FORSAKEWEEN",Font=Enum.Font.GothamBold,TextSize=14,
+    TextXAlignment=Enum.TextXAlignment.Left
+})
+local hudQuest=obj("TextLabel",hud,{
+    Position=UDim2.fromOffset(10,29),Size=UDim2.new(1,-20,0,49),
+    BackgroundTransparency=1,TextColor3=Color3.fromRGB(239,238,255),
+    TextWrapped=true,Font=Enum.Font.Gotham,TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Left
+})
+local hudProgress=obj("TextLabel",hud,{
+    Position=UDim2.fromOffset(10,80),Size=UDim2.new(1,-20,0,20),
+    BackgroundTransparency=1,TextColor3=Color3.fromRGB(195,210,255),
+    Font=Enum.Font.GothamMedium,TextSize=12,
+    TextXAlignment=Enum.TextXAlignment.Left
+})
+local function redrawQuest()
+    hud.Visible=questOn
+    hudTitle.Text="FORSAKEWEEN | ТИР "..questTier.." [ручной]"
+    hudQuest.Text=questText
+    hudProgress.Text="ПРОГРЕСС: "..questProgress.." / "..questGoal
+end
+local questToggle=button(pages.event,"")
+local questTierLabel=line(pages.event,"Текущий тир: 1",26)
+local questPrev=button(pages.event,"Предыдущий тир -1")
+local questNext=button(pages.event,"Следующий тир +1")
+line(pages.event,"Задание и прогресс пока вводятся вручную — игра может не предоставлять их клиенту.",44)
+line(pages.event,"Текст задания:",22)
+local questInput=obj("TextBox",pages.event,{
+    Size=UDim2.new(1,-8,0,65),BackgroundColor3=Color3.fromRGB(49,47,74),
+    BorderSizePixel=0,Text=questText,MultiLine=true,TextWrapped=true,
+    ClearTextOnFocus=false,TextColor3=Color3.new(1,1,1),
+    Font=Enum.Font.Gotham,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
+})
+corners(questInput,6)
+line(pages.event,"Сколько нужно выполнить (например, 5):",25)
+local goalInput=obj("TextBox",pages.event,{
+    Size=UDim2.new(1,-8,0,33),BackgroundColor3=Color3.fromRGB(49,47,74),
+    BorderSizePixel=0,Text="1",ClearTextOnFocus=false,
+    TextColor3=Color3.new(1,1,1),Font=Enum.Font.Gotham,TextSize=12
+})
+corners(goalInput,6)
+local questMinus=button(pages.event,"Прогресс -1")
+local questPlus=button(pages.event,"Прогресс +1")
+local function refreshQuestButtons()
+    questToggle.Text="Показывать HUD: "..(questOn and "ВКЛ" or "ВЫКЛ")
+    questTierLabel.Text="Текущий тир: "..questTier
+    redrawQuest()
+end
+questToggle.MouseButton1Click:Connect(function() questOn=not questOn;refreshQuestButtons() end)
+questPrev.MouseButton1Click:Connect(function()
+    questTier=math.max(1,questTier-1);questProgress=0;refreshQuestButtons()
+end)
+questNext.MouseButton1Click:Connect(function()
+    questTier=questTier+1;questProgress=0;refreshQuestButtons()
+end)
+questInput.FocusLost:Connect(function()
+    questText=questInput.Text:sub(1,220);redrawQuest()
+end)
+goalInput.FocusLost:Connect(function()
+    questGoal=math.clamp(tonumber(goalInput.Text) or questGoal,1,9999)
+    questGoal=math.floor(questGoal)
+    questProgress=math.min(questProgress,questGoal)
+    goalInput.Text=tostring(questGoal)
+    redrawQuest()
+end)
+questMinus.MouseButton1Click:Connect(function()
+    questProgress=math.max(0,questProgress-1);redrawQuest()
+end)
+questPlus.MouseButton1Click:Connect(function()
+    questProgress=math.min(questGoal,questProgress+1);redrawQuest()
+end)
+refreshQuestButtons()
 
 local status=obj("TextLabel",win,{
     Position=UDim2.new(0,10,1,-44),Size=UDim2.new(1,-20,0,38),
@@ -299,6 +399,28 @@ local function isNpc(model)
        or n:find("zombie",1,true) or n:find("undead",1,true)
        or n:find("rotten",1,true)
 end
+local restoreVisuals
+local mapCacheSource, mapCacheTime, mapCache = nil, 0, {}
+local function cachedMapModels(source)
+    local now=os.clock()
+    if mapCacheSource~=source or now-mapCacheTime>4 then
+        mapCacheSource, mapCacheTime=source, now
+        local fresh={}
+        if source then
+            for _,model in ipairs(source:GetDescendants()) do
+                if model:IsA("Model") then
+                    local n=model.Name:lower()
+                    if n=="generator" or n:find("fakegenerator",1,true)
+                       or n=="gear" or isNpc(model) then
+                        fresh[#fresh+1]=model
+                    end
+                end
+            end
+        end
+        mapCache=fresh
+    end
+    return mapCache
+end
 local function scan()
     local found,counts={},{}
     local function add(model,id,text)
@@ -328,8 +450,8 @@ local function scan()
     local gameMap=ingame and ingame:FindFirstChild("Map")
     local source=ingame or map
     if source then
-        for _,model in ipairs(source:GetDescendants()) do
-            if model:IsA("Model") then
+        for _,model in ipairs(cachedMapModels(source)) do
+            if model:IsA("Model") and model:IsDescendantOf(source) then
                 local n=model.Name:lower()
                 if (n=="generator" or n:find("fakegenerator",1,true))
                    and model:FindFirstChild("Main") then
@@ -372,10 +494,10 @@ local function scan()
         mark.highlight.FillTransparency=transparency
         mark.highlight.Enabled=true
         mark.billboard.Adornee=info.part
-        mark.billboard.Enabled=labelsOn
+        mark.billboard.Enabled=labelsOn and not liteMode
         mark.text.TextColor3=color[info.id]
         local text=info.name
-        if distanceOn then
+        if distanceOn and labelsOn and not liteMode then
             local myRoot=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if myRoot then
                 text=text.." ["..math.floor((myRoot.Position-info.part.Position).Magnitude).." st]"
@@ -395,6 +517,7 @@ end
 local function stop()
     if not running then return end
     running=false
+    if restoreVisuals then restoreVisuals() end
     if dragConnection then dragConnection:Disconnect() end
     for model in pairs(markers) do clear(model) end
     gui:Destroy()
@@ -408,7 +531,39 @@ task.spawn(function()
             warn("[NOVA 0.3.1] ",err)
             if status.Parent then status.Text="ОШИБКА: "..tostring(err):sub(1,100) end
         end
-        task.wait(1.0)
+        task.wait(refreshSteps[refreshIndex])
     end
 end)
-print("[NOVA] ESP v0.3.1 started")
+
+-- Client-only visual suppressor, with reversible original Enabled state.
+local suppressed={}
+restoreVisuals=function()
+    for inst,oldState in pairs(suppressed) do
+        if inst and inst.Parent then
+            pcall(function() inst.Enabled=oldState end)
+        end
+        suppressed[inst]=nil
+    end
+end
+local function suppressVisuals()
+    if not antiBlindOn then restoreVisuals(); return end
+    for _,container in ipairs({Lighting,workspace.CurrentCamera or Lighting}) do
+        for _,inst in ipairs(container:GetDescendants()) do
+            local named=inst.Name:lower()
+            if inst:IsA("BlurEffect") or
+                (inst:IsA("ColorCorrectionEffect") and
+                (named:find("blind",1,true) or named:find("flash",1,true))) then
+                if suppressed[inst]==nil then suppressed[inst]=inst.Enabled end
+                if inst.Enabled then inst.Enabled=false end
+            end
+        end
+    end
+end
+task.spawn(function()
+    while running do
+        local ok,err=pcall(suppressVisuals)
+        if not ok then warn("[NOVA] Anti Blind: ",err) end
+        task.wait(2)
+    end
+end)
+print("[NOVA] ESP v0.4 started")
