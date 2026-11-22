@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.6.1 TEST (focused combat and generator lab)
+-- NOVA FORSAKEN v0.6.2 TEST (focused combat, generator and Noli config lab)
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -78,7 +78,7 @@ local header=obj("Frame",win,{
 })
 obj("TextLabel",header,{
     Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
-    Text="NOVA  /  0.6.1 TEST",Font=Enum.Font.GothamBold,TextSize=17,
+    Text="NOVA  /  0.6.2 TEST",Font=Enum.Font.GothamBold,TextSize=17,
     TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
     BackgroundTransparency=1
 })
@@ -759,7 +759,7 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.6.1 test started")
+print("[NOVA] ESP v0.6.2 test started")
 
 
 -- Focused experimental lab: Forsaken game objects, not guessed key presses.
@@ -883,6 +883,96 @@ local okLab, labErr=pcall(function()
         probeResult.Text=(ok and "Вызов выполнен: " or "Ошибка: ")..msg
     end)
     line(pages.combat,"Проверяем именно QueryHitbox киллера. Незнакомые анимации и ненайденные игровые объекты не считаем успешным блоком.",75,muted,11)
+
+    line(pages.combat,"NOLI  ·  VOID RUSH CONTROL",31,mint,12)
+    local noliInfo=line(pages.combat,
+        "Улучшенное управление задаётся через Config Noli. Требуется поддержка require; действует со следующего появления убийцы.",
+        65,muted,11)
+    local noliButton=button(pages.combat,"○  Better Void Rush  /  ВЫКЛ")
+    local noliOriginal={}
+    local noliOn=false
+    local function findParam(tbl,needle,seen,depth)
+        if type(tbl)~="table" or depth>10 or seen[tbl] then return nil,nil end
+        seen[tbl]=true
+        for k,v in pairs(tbl) do
+            if type(k)=="string" and type(v)=="number" and
+               k:find(needle,1,true) and not k:find(needle.."OG",1,true) then
+                return tbl,k
+            end
+        end
+        for _,v in pairs(tbl) do
+            if type(v)=="table" then
+                local parent,key=findParam(v,needle,seen,depth+1)
+                if parent then return parent,key end
+            end
+        end
+        return nil,nil
+    end
+    local noliConfig=nil
+    local function findNoliConfig()
+        if noliConfig then return noliConfig end
+        local assets=RS:FindFirstChild("Assets")
+        local killers=assets and assets:FindFirstChild("Killers")
+        local folder=killers and killers:FindFirstChild("Noli")
+        if not folder then return nil,"Assets.Killers.Noli не найден" end
+        local cfg=folder:FindFirstChild("Config",true)
+        if not cfg or not cfg:IsA("ModuleScript") then
+            return nil,"Noli.Config не найден"
+        end
+        local ok,result=pcall(require,cfg)
+        if not ok then return nil,"require(Noli.Config): "..tostring(result):sub(1,70) end
+        if type(result)~="table" then return nil,"Noli.Config не таблица" end
+        noliConfig=result
+        return result
+    end
+    local function restoreNoli()
+        for _,item in ipairs(noliOriginal) do
+            item.parent[item.key]=item.value
+        end
+        table.clear(noliOriginal)
+        noliOn=false
+        noliButton.Text="○  Better Void Rush  /  ВЫКЛ"
+        noliButton.BackgroundColor3=raised
+    end
+    local function enableNoli()
+        local config,msg=findNoliConfig()
+        if not config then return false,msg end
+        local entries={
+            {name="InitialTurnDuration",value=.005},
+            {name="TurnSpeed",value=10000},
+            {name="InitialTurnMult",value=1000},
+        }
+        local proposed={}
+        for _,e in ipairs(entries) do
+            local parent,key=findParam(config,e.name,{},0)
+            if not parent then
+                return false,"Параметр "..e.name.." отсутствует; ничего не меняла"
+            end
+            proposed[#proposed+1]={parent=parent,key=key,value=parent[key],new=e.value}
+        end
+        for _,entry in ipairs(proposed) do
+            entry.parent[entry.key]=entry.new
+            noliOriginal[#noliOriginal+1]=entry
+        end
+        noliOn=true
+        noliButton.Text="●  Better Void Rush  /  ВКЛ"
+        noliButton.BackgroundColor3=Color3.fromRGB(46,85,79)
+        return true,"3 параметра обновлены. Эффект ожидается после нового спавна Noli."
+    end
+    noliButton.MouseButton1Click:Connect(function()
+        if noliOn then
+            restoreNoli()
+            noliInfo.Text="Оригинальные параметры Noli восстановлены. При необходимости начни новый раунд."
+            return
+        end
+        local ok,message=enableNoli()
+        noliInfo.Text=(ok and "ОК: " or "НЕ ПОДДЕРЖИВАЕТСЯ: ")..message
+    end)
+    line(pages.combat,"NOSFERATU / GUEST 666",30,mint,12)
+    line(pages.combat,
+        "Авто-Bloodhook и таймер Blood Hunt пока убраны из тестовой версии: работающего способа запуска не подтвердили.",
+        78,muted,11)
+
     line(pages.generator,"ГЕНЕРАТОРЫ  ·  РЕАЛЬНЫЕ СОБЫТИЯ",33,mint,12)
     toggle(pages.generator,"Auto Generator (legacy event)","autoGen")
     local genInfo=line(pages.generator,"Открой головоломку на генераторе.",94,white,12)
@@ -1006,6 +1096,7 @@ local okLab, labErr=pcall(function()
         end)
     end
     labCleanup=function()
+        if noliOn then restoreNoli() end
         clearCharacter()
         for _,conn in pairs(killerLinks) do conn:Disconnect() end
         table.clear(killerLinks)
