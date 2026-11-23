@@ -1118,12 +1118,21 @@ local okLab, labErr=pcall(function()
     end
     local function isCoolkid(killer)
         if not killer then return false end
-        local name=tostring(killer:GetAttribute("ActorName") or
-            killer:GetAttribute("CharacterName") or killer.Name):lower()
-        name=name:gsub("[%s_%-]","")
-        return name:find("c00lkidd",1,true)~=nil or
-            name:find("coolkid",1,true)~=nil or
-            name:find("c0llabk1dd",1,true)~=nil
+        local names={
+            killer.Name,
+            tostring(killer:GetAttribute("ActorName") or ""),
+            tostring(killer:GetAttribute("CharacterName") or ""),
+            tostring(killer:GetAttribute("OriginalName") or "")
+        }
+        for _,value in ipairs(names) do
+            local name=value:lower():gsub("[%s_%-]","")
+            if name:find("c00lkidd",1,true) or
+                name:find("coolkid",1,true) or
+                name:find("c0llabk1dd",1,true) then
+                return true
+            end
+        end
+        return false
     end
     local overlap=OverlapParams.new()
     overlap.FilterType=Enum.RaycastFilterType.Include
