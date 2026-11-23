@@ -3,13 +3,24 @@
   "project": "forsaken",
   "title": "Forsaken NOVA",
   "version": "0.5.0",
-  "status": "available",
+  "status": "stable",
   "script_url": "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua",
   "repository_url": "https://github.com/Trotilov/nova-forsaken",
   "changelog": [
-    "Обновление NOVA v0.5.0 — интерфейс для планшета",
+    "Стабильная v0.5.0: интерфейс для планшета",
     "ESP киллеров и выживших",
     "Экспериментальная подсветка генераторов, шестерёнок и миньонов",
-    "Режимы отображения и дополнительные настройки"
-  ]
+    "Настройки отображения и Forsakeween HUD"
+  ],
+  "beta": {
+    "version": "0.6.5 TEST",
+    "status": "testing",
+    "script_url": "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova_beta.lua",
+    "changelog": [
+      "Тестовая ветка v0.6.5 с Auto Block для c00lkidd",
+      "Режимы блокирования: точный, ранний, предиктивный",
+      "Ускоренная реакция на M1 и диагностика",
+      "Не подтверждена 100% стабильность: возможны пропуски атак"
+    ]
+  }
 }
