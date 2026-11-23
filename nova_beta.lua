@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.6.5 TEST (fast c00lkidd reactive and predictive autoblock)
+-- NOVA FORSAKEN v0.6.6 TEST (experimental live Noli steering + reactive autoblock)
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -78,7 +78,7 @@ local header=obj("Frame",win,{
 })
 obj("TextLabel",header,{
     Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
-    Text="NOVA  /  0.6.5 TEST",Font=Enum.Font.GothamBold,TextSize=17,
+    Text="NOVA  /  0.6.6 TEST",Font=Enum.Font.GothamBold,TextSize=17,
     TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
     BackgroundTransparency=1
 })
@@ -759,7 +759,7 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.6.5 test started")
+print("[NOVA] ESP v0.6.6 test started")
 
 
 -- Focused experimental lab: Forsaken game objects, not guessed key presses.
@@ -907,6 +907,30 @@ local okLab, labErr=pcall(function()
     drawRushMode()
     local noliOriginal={}
     local noliOn=false
+    local liveOn=false
+    local liveDash=nil
+    local liveHeading=nil
+    local liveButton=nil
+    local liveConnection=nil
+    local function stopLiveDash()
+        if not liveDash then return end
+        local st=liveDash
+        liveDash=nil
+        liveHeading=nil
+        local hum=st.hum
+        if hum and hum.Parent then
+            if hum.WalkSpeed==st.appliedSpeed then hum.WalkSpeed=st.originalSpeed end
+            if hum.AutoRotate==false then hum.AutoRotate=st.originalRotate end
+        end
+    end
+    local function disableLive()
+        liveOn=false
+        stopLiveDash()
+        if liveButton then
+            liveButton.Text="○  Live Steering  /  ВЫКЛ"
+            liveButton.BackgroundColor3=raised
+        end
+    end
     local function findParam(tbl,needle,seen,depth)
         if type(tbl)~="table" or depth>10 or seen[tbl] then return nil,nil end
         seen[tbl]=true
@@ -977,6 +1001,7 @@ local okLab, labErr=pcall(function()
         return true,"Режим "..rushPresets[rushMode].name.." включён. Изменения могут примениться со следующего спавна Noli."
     end
     noliButton.MouseButton1Click:Connect(function()
+        if liveOn then disableLive() end
         if noliOn then
             restoreNoli()
             noliInfo.Text="Оригинальные параметры Noli восстановлены. При необходимости начни новый раунд."
@@ -994,8 +1019,74 @@ local okLab, labErr=pcall(function()
             local ok,message=enableNoli()
             noliInfo.Text=(ok and "ОК: " or "НЕ ПОДДЕРЖИВАЕТСЯ: ")..message
         else
-            noliInfo.Text="Выбран режим "..rushPresets[rushMode].name..". Нажми Better Void Rush для применения."
+            noliInfo.Text=liveOn and
+                ("Live Steering: "..rushPresets[rushMode].name..". Повороты обновляются в реальном времени.") or
+                ("Выбран режим "..rushPresets[rushMode].name..". Нажми Better Void Rush для применения.")
         end
+    end)
+    -- Separate, opt-in movement steering while Noli has VoidRushState=Dashing.
+    -- Adapted from publicly inspectable skibidi399/noli-void-rush-control.
+    -- Does NOT hook or alter the game's internal Void Rush controller.
+    liveButton=button(pages.combat,"○  Live Steering  /  ВЫКЛ")
+    local liveInfo=line(pages.combat,
+        "ЭКСПЕРИМЕНТ: меняет направление Humanoid:Move только во время Dashing. Пресеты переключаются прямо в раунде. Возможен конфликт с движком способности.",
+        88,muted,11)
+    local liveRates={120,220,450}
+    local liveRS=game:GetService("RunService")
+    local upAxis=Vector3.new(0,1,0)
+    local function flatDir(dir)
+        local v=Vector3.new(dir.X,0,dir.Z)
+        return v.Magnitude>.001 and v.Unit or nil
+    end
+    liveButton.MouseButton1Click:Connect(function()
+        if liveOn then
+            disableLive()
+            liveInfo.Text="Live Steering выключен. Оригинальное управление восстановлено, если игра его не переопределила."
+            return
+        end
+        if noliOn then restoreNoli() end
+        liveOn=true
+        liveButton.Text="●  Live Steering  /  ВКЛ"
+        liveButton.BackgroundColor3=Color3.fromRGB(46,85,79)
+        liveInfo.Text="Live Steering включён. Повороты: "..rushPresets[rushMode].name..". Жду VoidRushState=Dashing."
+    end)
+    liveConnection=liveRS.RenderStepped:Connect(function(dt)
+        if not running then
+            disableLive()
+            if liveConnection then liveConnection:Disconnect();liveConnection=nil end
+            return
+        end
+        if not liveOn then return end
+        local ch=player.Character
+        if not ch or ch:GetAttribute("VoidRushState")~="Dashing" then
+            if liveDash then
+                stopLiveDash()
+                liveInfo.Text="Live Steering: жду следующего Void Rush. Режим "..rushPresets[rushMode].name
+            end
+            return
+        end
+        local hum=ch:FindFirstChildOfClass("Humanoid")
+        local root=ch:FindFirstChild("HumanoidRootPart")
+        local camera=workspace.CurrentCamera
+        if not hum or hum.Health<=0 or not root or not camera then return end
+        if not liveDash or liveDash.hum~=hum then
+            stopLiveDash()
+            local oldSpeed=hum.WalkSpeed
+            local boostedSpeed=math.max(60,oldSpeed)
+            liveDash={hum=hum,originalSpeed=oldSpeed,originalRotate=hum.AutoRotate,appliedSpeed=boostedSpeed}
+            liveHeading=flatDir(root.CFrame.LookVector)
+            hum.WalkSpeed=boostedSpeed
+            hum.AutoRotate=false
+            liveInfo.Text="Live Steering: Dashing! Режим "..rushPresets[rushMode].name
+        end
+        local target=flatDir(camera.CFrame.LookVector)
+        if not target then return end
+        if not liveHeading then liveHeading=flatDir(root.CFrame.LookVector) or target end
+        local angle=math.atan2(liveHeading:Cross(target).Y,liveHeading:Dot(target))
+        local cap=math.rad(liveRates[rushMode])*math.clamp(dt,0,.1)
+        local change=math.clamp(angle,-cap,cap)
+        liveHeading=flatDir(CFrame.fromAxisAngle(upAxis,change):VectorToWorldSpace(liveHeading)) or target
+        hum:Move(liveHeading,false)
     end)
     line(pages.combat,"NOSFERATU / GUEST 666",30,mint,12)
     line(pages.combat,
@@ -1290,6 +1381,8 @@ local okLab, labErr=pcall(function()
         end)
     end
     labCleanup=function()
+        disableLive()
+        if liveConnection then liveConnection:Disconnect();liveConnection=nil end
         if noliOn then restoreNoli() end
         clearCharacter()
         for _,conn in pairs(killerLinks) do conn:Disconnect() end
