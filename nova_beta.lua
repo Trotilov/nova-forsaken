@@ -1,4 +1,4 @@
--- NOVA FORSAKEN v0.6.4 TEST (4s base generator interval + mild solo boost)
+-- NOVA FORSAKEN v0.6.5 TEST (fast c00lkidd reactive and predictive autoblock)
 -- Single-file, local only; does not download or execute third-party scripts.
 -- Killer/survivor ESP is based on the user's working v0.2.
 -- Generator / gear / minion detection is experimental and version-dependent.
@@ -78,7 +78,7 @@ local header=obj("Frame",win,{
 })
 obj("TextLabel",header,{
     Position=UDim2.fromOffset(16,0),Size=UDim2.fromOffset(240,43),
-    Text="NOVA  /  0.6.4 TEST",Font=Enum.Font.GothamBold,TextSize=17,
+    Text="NOVA  /  0.6.5 TEST",Font=Enum.Font.GothamBold,TextSize=17,
     TextColor3=white,TextXAlignment=Enum.TextXAlignment.Left,
     BackgroundTransparency=1
 })
@@ -759,7 +759,7 @@ task.spawn(function()
         task.wait(2)
     end
 end)
-print("[NOVA] ESP v0.6.4 test started")
+print("[NOVA] ESP v0.6.5 test started")
 
 
 -- Focused experimental lab: Forsaken game objects, not guessed key presses.
@@ -791,7 +791,7 @@ local okLab, labErr=pcall(function()
     end
     local function isAttackName(s)
         s=tostring(s):lower()
-        for _,n in ipairs({"slash","enragedslash","stab","attack","punch","swing","golemslash"}) do
+        for _,n in ipairs({"slash","enragedslash","stab","attack","punch","swing","golemslash","m1"}) do
             if s:find(n,1,true) then return true end
         end
         return false
@@ -874,7 +874,7 @@ local okLab, labErr=pcall(function()
     line(pages.combat,"GUEST 1337  ·  ПРОВЕРКА СОБЫТИЙ",30,mint,12)
     toggle(pages.combat,"Auto Block по анимации + хитбоксу","autoBlock")
     toggle(pages.combat,"Auto Punch после блока","autoPunch")
-    local combatInfo=line(pages.combat,"Ожидаю персонажа...",72,white,12)
+    local combatInfo=line(pages.combat,"Ожидаю персонажа...",102,white,12)
     local probe=button(pages.combat,"ТЕСТ: отправить Block сейчас")
     local probeResult=line(pages.combat,"Тест нужен для проверки связи с игрой. Используй за Guest 1337.",65,muted,11)
     probe.MouseButton1Click:Connect(function()
@@ -1078,45 +1078,173 @@ local okLab, labErr=pcall(function()
         end)
         genInfo.Text=ok and msg or "Ошибка проверки: "..tostring(msg):sub(1,80)
     end)
+
+    -- c00lkidd has an extremely short M1 startup. React at AnimationPlayed
+    -- when safely in its forward cone; optional predictive mode is riskier.
+    local RunService=game:GetService("RunService")
+    local fastModes={
+        {name="Точный",detail="только пересечение хитбокса"},
+        {name="Ранний",detail="в начале анимации + прогноз позиции"},
+        {name="Предиктивный",detail="ранний блок + прогноз до анимации"}
+    }
+    local fastMode=2
+    local fastModeButton=button(pages.combat,"")
+    local fastInfo=line(pages.combat,
+        "Ранний режим реагирует на начало M1 CoolKid. Предиктивный может тратить блок на обманные сближения.",
+        64,muted,11)
+    local function drawFastMode()
+        local mode=fastModes[fastMode]
+        fastModeButton.Text="CoolKid: "..mode.name.." блок"
+        fastInfo.Text=mode.detail..". Результат зависит от пинга; отправка способности не подтверждает парирование."
+    end
+    drawFastMode()
+    fastModeButton.MouseButton1Click:Connect(function()
+        fastMode=fastMode%#fastModes+1
+        drawFastMode()
+    end)
+    local fastAttempts,fastThreats=0,0
+    local lastThreat="Пока нет атак CoolKid"
+    local pingLead=.065
+    local lastPingSample=-100
+    local function getLead()
+        if os.clock()-lastPingSample>3 then
+            lastPingSample=os.clock()
+            local ok,ping=pcall(function()return player:GetNetworkPing() end)
+            if ok and type(ping)=="number" then
+                pingLead=math.clamp(ping+.025,.035,.14)
+            end
+        end
+        return pingLead
+    end
+    local function isCoolkid(killer)
+        if not killer then return false end
+        local name=tostring(killer:GetAttribute("ActorName") or
+            killer:GetAttribute("CharacterName") or killer.Name):lower()
+        name=name:gsub("[%s_%-]","")
+        return name:find("c00lkidd",1,true)~=nil or
+            name:find("coolkid",1,true)~=nil or
+            name:find("c0llabk1dd",1,true)~=nil
+    end
+    local overlap=OverlapParams.new()
+    overlap.FilterType=Enum.RaycastFilterType.Include
+    overlap.MaxParts=1
     local function inRange(killer)
         local ch=player.Character
         local localQ=ch and ch:FindFirstChild("QueryHitbox")
         local killerQ=killer and killer:FindFirstChild("QueryHitbox")
         if not localQ or not killerQ then return false,"QueryHitbox отсутствует" end
-        local params=OverlapParams.new()
-        params.FilterType=Enum.RaycastFilterType.Include
-        params.FilterDescendantsInstances={localQ}
-        params.MaxParts=1
+        overlap.FilterDescendantsInstances={localQ}
         local box=killerQ.CFrame*CFrame.new(0,0,-3.5)
-        local touches=workspace:GetPartBoundsInBox(box,Vector3.new(11.44,13.2,12.43),params)
+        local touches=workspace:GetPartBoundsInBox(box,Vector3.new(11.44,13.2,12.43),overlap)
         return #touches>0,"Проверка QueryHitbox"
+    end
+    local function threat(killer,range,lead,requireClosing)
+        local ch=player.Character
+        local mine=ch and ch:FindFirstChild("HumanoidRootPart")
+        local enemy=killer and killer:FindFirstChild("HumanoidRootPart")
+        if not mine or not enemy then return false,math.huge end
+        local mePosition=mine.Position+mine.AssemblyLinearVelocity*lead
+        local enemyPosition=enemy.Position+enemy.AssemblyLinearVelocity*lead
+        local difference=mePosition-enemyPosition
+        local flat=Vector3.new(difference.X,0,difference.Z)
+        local d=flat.Magnitude
+        if d<.2 or d>range then return false,d end
+        local toMe=flat/d
+        local facing=Vector3.new(enemy.CFrame.LookVector.X,0,enemy.CFrame.LookVector.Z)
+        if facing.Magnitude<.1 then return false,d end
+        local facingDot=facing.Unit:Dot(toMe)
+        if facingDot<.46 then return false,d end
+        if requireClosing then
+            local relative=enemy.AssemblyLinearVelocity-mine.AssemblyLinearVelocity
+            local closing=Vector3.new(relative.X,0,relative.Z):Dot(toMe)
+            if closing<5 then return false,d end
+        end
+        return true,d
+    end
+    local function sendAutoBlock(context)
+        if not settings.autoBlock or not isGuest() or os.clock()-lastBlockTime<1.3 then return false end
+        -- Lock before sending, to prevent multiple per-frame triggers.
+        local t=os.clock()
+        lastBlockTime=t
+        local ok,message=doAbility("Block")
+        if ok then
+            fastAttempts=fastAttempts+1
+            blockStatus="Block ("..context..") → отправлено, не подтверждено"
+        else
+            lastBlockTime=t-.95
+            blockStatus="Ошибка блока: "..tostring(message)
+        end
+        return ok
     end
     local function onAttack(killer,track)
         if not settings.autoBlock or not isGuest() or os.clock()-lastBlockTime<1.3 then return end
-        local anim=track and track.Animation
-        local animID=anim and tostring(anim.AnimationId):match("(%d+)")
-        local known=animID and knownAnimations[animID]
-        local named=anim and isAttackName(anim.Name)
+        local a=track and track.Animation
+        local id=a and tostring(a.AnimationId):match("(%d+)")
+        local known=id and knownAnimations[id]
+        local named=a and isAttackName(a.Name)
         if not known and not named then
-            blockStatus="Анимация неизвестна: "..tostring(animID or "?")
+            if isCoolkid(killer) then
+                lastThreat="Неизвестная анимация CoolKid "..tostring(id or "?")
+            end
             return
         end
-        task.spawn(function()
-            for i=1,12 do
-                if not settings.autoBlock or not isGuest() then return end
-                local hit,why=inRange(killer)
-                if hit then
-                    if os.clock()-lastBlockTime<1.3 then return end
-                    lastBlockTime=os.clock()
-                    local ok,msg=doAbility("Block")
-                    blockStatus=ok and ("Block → "..msg) or ("Не сработало: "..msg)
-                    return
+        local cool=isCoolkid(killer)
+        if cool then
+            fastThreats=fastThreats+1
+            lastThreat="CoolKid M1: "..tostring(known or (a and a.Name) or id)
+            if fastMode>=2 then
+                local likely,d=threat(killer,7.4,getLead(),false)
+                if likely then
+                    if sendAutoBlock("CoolKid ранний, "..string.format("%.1f",d).." st") then
+                        return
+                    end
                 end
-                blockStatus=why
-                task.wait(.02)
+            end
+        end
+        -- First hitbox check runs synchronously in AnimationPlayed: no extra task delay.
+        local initial=inRange(killer)
+        if initial and sendAutoBlock(cool and "CoolKid хитбокс" or "хитбокс") then return end
+        task.spawn(function()
+            for i=1,(cool and 18 or 12) do
+                if not running or not settings.autoBlock or not isGuest() then return end
+                if killer.Parent==nil or not track.IsPlaying then return end
+                RunService.Heartbeat:Wait()
+                local contact=inRange(killer)
+                if contact then
+                    if sendAutoBlock(cool and "CoolKid хитбокс" or "хитбокс") then return end
+                end
+                if cool and fastMode>=2 then
+                    local likely,d=threat(killer,7.0,getLead(),false)
+                    if likely then
+                        if sendAutoBlock("CoolKid реакция, "..string.format("%.1f",d).." st") then return end
+                    end
+                end
             end
         end)
     end
+    -- Optional early prediction before the animation replicates to the client.
+    -- This may be baited by an approaching c00lkidd; no guarantee of a parry.
+    task.spawn(function()
+        while running do
+            if settings.autoBlock and fastMode==3 and isGuest() and
+                os.clock()-lastBlockTime>1.3 then
+                local group=killerFolder()
+                if group then
+                    for _,killer in ipairs(group:GetChildren()) do
+                        if isCoolkid(killer) then
+                            local likely,d=threat(killer,4.9,getLead(),true)
+                            if likely then
+                                lastThreat="Сближение CoolKid без явной M1"
+                                if sendAutoBlock("CoolKid прогноз, "..string.format("%.1f",d).." st") then break end
+                            end
+                        end
+                    end
+                end
+            end
+            task.wait(.05)
+        end
+    end)
+
     local function attachKiller(killer)
         if killerLinks[killer] or not killer:IsA("Model") then return end
         local hum=killer:FindFirstChildOfClass("Humanoid")
@@ -1176,6 +1304,7 @@ local okLab, labErr=pcall(function()
                     .."  |  анимаций: "..tostring((function()
                         local n=0;for _ in pairs(knownAnimations) do n=n+1 end;return n
                     end)()).."\nBlock: "..blockStatus.."\nPunch: "..punchStatus
+                    .."\nCoolKid: "..lastThreat.." | попыток: "..fastAttempts
                 if settings.autoGen then
                     local event,msg=inspectGenerator()
                     local nearby=anyoneNearby(soloRadius)
