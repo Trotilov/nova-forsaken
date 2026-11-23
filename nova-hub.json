@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "project": "forsaken",
+  "title": "Forsaken NOVA",
+  "version": "0.5.0",
+  "status": "available",
+  "script_url": "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua",
+  "repository_url": "https://github.com/Trotilov/nova-forsaken",
+  "changelog": [
+    "Обновление NOVA v0.5.0 — интерфейс для планшета",
+    "ESP киллеров и выживших",
+    "Экспериментальная подсветка генераторов, шестерёнок и миньонов",
+    "Режимы отображения и дополнительные настройки"
+  ]
+}
