@@ -1,0 +1,101 @@
+name: Keep Nova Hub versions up to date
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nova.lua'
+      - 'nova_beta.lua'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nova-hub-version-sync
+  cancel-in-progress: false
+
+jobs:
+  update-hub-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout script repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Detect versions and sync changelog
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+
+          manifest_path = Path("nova-hub.json")
+          data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+          if data.get("schema") != 1 or data.get("project") != "forsaken":
+              raise SystemExit("Unsupported Nova Hub manifest")
+
+          expected = {
+              "stable": ("nova.lua", "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua"),
+              "beta": ("nova_beta.lua", "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova_beta.lua"),
+          }
+          header = re.compile(r"^\s*--\s*NOVA\s+FORSAKEN\s+v(\d+\.\d+(?:\.\d+)?)(?:\s+(TEST|BETA))?\b", re.IGNORECASE | re.MULTILINE)
+
+          for channel, (filename, url) in expected.items():
+              source = Path(filename)
+              if not source.is_file():
+                  continue
+              match = header.search(source.read_text(encoding="utf-8")[:1500])
+              if not match:
+                  raise SystemExit(f"No recognizable NOVA version header in {filename}")
+
+              version = match.group(1)
+              label = version if channel == "stable" else version + " TEST"
+              target = data if channel == "stable" else data.setdefault("beta", {})
+              if target.get("script_url") not in (None, url):
+                  raise SystemExit(f"Unexpected script URL in {channel}")
+              target["script_url"] = url
+              target["version"] = label
+              target["status"] = "stable" if channel == "stable" else "testing"
+
+              subject = subprocess.check_output(
+                  ["git", "log", "-1", "--format=%s", "--", filename],
+                  text=True,
+              ).strip()
+              sha = subprocess.check_output(
+                  ["git", "log", "-1", "--format=%h", "--", filename],
+                  text=True,
+              ).strip()
+              if target.get("source_commit") != sha:
+                  target["source_commit"] = sha
+                  target["changelog"] = [
+                      f"Обновление NOVA v{label}",
+                      f"Последнее изменение: {subject}" if subject else "Новый код опубликован на GitHub",
+                      "Полная история изменений доступна в репозитории Forsaken NOVA",
+                  ]
+
+          updated = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+          if updated != manifest_path.read_text(encoding="utf-8"):
+              manifest_path.write_text(updated, encoding="utf-8")
+              print("Manifest updated from Lua sources")
+          else:
+              print("Manifest already current")
+          PY
+
+      - name: Publish version information
+        shell: bash
+        run: |
+          if git diff --quiet -- nova-hub.json; then
+            echo "No changes to publish"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nova-hub.json
+          git commit -m "chore: auto-sync NOVA versions for Nova Hub"
+          git push origin HEAD:main
