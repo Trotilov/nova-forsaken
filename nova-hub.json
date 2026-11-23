@@ -7,20 +7,20 @@
   "script_url": "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua",
   "repository_url": "https://github.com/Trotilov/nova-forsaken",
   "changelog": [
-    "Стабильная v0.5.0: интерфейс для планшета",
-    "ESP киллеров и выживших",
-    "Экспериментальная подсветка генераторов, шестерёнок и миньонов",
-    "Настройки отображения и Forsakeween HUD"
+    "Обновление NOVA v0.5.0",
+    "Последнее изменение: Restore proven NOVA 0.5 on default loader; move new mechanics to isolated beta",
+    "Полная история изменений доступна в репозитории Forsaken NOVA"
   ],
   "beta": {
-    "version": "0.6.5 TEST",
+    "version": "0.6.6 TEST",
     "status": "testing",
     "script_url": "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova_beta.lua",
     "changelog": [
-      "Тестовая ветка v0.6.5 с Auto Block для c00lkidd",
-      "Режимы блокирования: точный, ранний, предиктивный",
-      "Ускоренная реакция на M1 и диагностика",
-      "Не подтверждена 100% стабильность: возможны пропуски атак"
-    ]
-  }
+      "Обновление NOVA v0.6.6 TEST",
+      "Последнее изменение: NOVA beta 0.6.6: experimental live Noli steering using VoidRushState and camera-guided Humanoid Move",
+      "Полная история изменений доступна в репозитории Forsaken NOVA"
+    ],
+    "source_commit": "ba03039"
+  },
+  "source_commit": "57ae591"
 }
